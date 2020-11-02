@@ -10,12 +10,18 @@
 #include "uart.h"
 #include "pwm.h"
 #include "camera_FTM.h"
-#include "stdio.h"
+#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
 
 #define A (1<<0)
 #define B (1<<1)
 #define C (1<<2)
 #define D (1<<3)
+#define midpoint 63
+#define M_PI 3.14159265358979323846
+#define MAX_THETA 90
+#define servoMiddle 4.6
 void delay(int del);
 int motorTest(int testNum);
 
@@ -23,6 +29,7 @@ int motorTest(int testNum);
 void FTM2_IRQHandler(void);
 void PIT1_IRQHandler(void);
 void ADC0_IRQHandler(void);
+void motorSpeed(int);
 
 // Pixel counter for camera logic
 // Starts at -2 so that the SI pulse occurs
@@ -32,6 +39,7 @@ int pixcnt = -2;
 int clkval = 0;
 // line stores the current array of camera data
 uint16_t line[128];
+uint16_t newData[128];
 
 // These variables are for streaming the camera
 //	 data over UART
@@ -52,110 +60,129 @@ int main(void) {
 	// Print welcome over serial
 	uart0_put("Running... \n\r");
 	
-	// Part 1 - UNCOMMENT THIS
-	// Generate 20% duty cycle at 10kHz
-	// FTM0_set_duty_cycle(75, 10000, 0);
-	// FTM2_set_duty_cycle(75, 50, 0);
-	// for(;;) ;  //then loop forever
-	
-	
-	// Part 2 - UNCOMMENT THIS
-	//  Enable  clocks  on Port D
-	// SIM_SCGC5 |= SIM_SCGC5_PORTD_MASK;
-	// Configure the Signal Multiplexer for GPIO
-	// PORTD_PCR0 = PORT_PCR_MUX(1);	//PTD0
-	// PORTD_PCR1 = PORT_PCR_MUX(1);	//PTD1
-	// PORTD_PCR2 = PORT_PCR_MUX(1);	//PTD2
-	// PORTD_PCR3 = PORT_PCR_MUX(1);	//PTD3
-
-	// Switch the GPIO pins to output mode
-	// GPIOD_PDDR |= 0x0F;
-	
-    // int  forward = 1;
-    // int  phase = 0;
-	// int  testNum = 1;
-	
 	for(;;)  //loop forever
 	{
 		// uint16_t dc = 0;
 		uint16_t freq0 = 10000; // Frequency = 10 kHz
 		uint16_t freq3 = 50; // Frequency = 50 Hz 		
-		uint16_t dir = 1;
+		uint16_t dir = 0;
 //		char c = 48;
-		double i=0;
+		int firstOne = 0;
+		int risingEdge = 0, fallingEdge = 0;
+		int mPoint = 0;
+		int difference;
+		double i = 0;
+		int j;
 		
-		// camera debugging and operation 
-		if (debugcamdata) {
-			// Every 2 seconds
-			//if (capcnt >= (2/INTEGRATION_TIME)) {
-			if (capcnt >= (500)) {
-				GPIOB_PCOR |= (1 << 22);
-				// send the array over uart
-				sprintf(str,"%i\n\r",-1); // start value
-				uart0_put(str);
-				for (int i = 0; i < 127; i++) {
-					sprintf(str,"%i\n", line[i]);
-					uart0_put(str);
+		// camera debugging and operation 	
+			// send the array over uart
+			sprintf(str,"%i\n\r",-1); // start value
+			uart0_put(str);
+				
+//			motorSpeed(30);
+			//smooth trace
+			for (j = 0; j < 127; j++) {					
+				if(j < 123)
+				{
+					line[j] = (line[j] + line[j+1] + line[j+2] + line[j+3] + line[j+4])/5;
 				}
-				sprintf(str,"%i\n\r",-2); // end value
-				uart0_put(str);
-				capcnt = 0;
-				GPIOB_PSOR |= (1 << 22);
-			}
-		}
-		
-		FTM0_set_duty_cycleA(30,freq0,dir);
-		FTM0_set_duty_cycleB(30,freq0,dir);
-
-		// 0 to 100% duty cycle in forward direction
-//		for (i=0; i<100; i++) {
-//			FTM0_set_duty_cycleA(30, freq0, !dir);
-//			FTM0_set_duty_cycleB(30, freq0, !dir);
-//			delay(10);
-//		}
-
-//			delay(20);
-//        
-//		for (i=0; i<100; i++) {
-//				FTM0_set_duty_cycle(30, freq0, dir);
-//				delay(10);
-//				
-//		}
+				else
+				{
+					line[j] = 127;
+				}
+			}	
 			
-//			delay(20);
-//        
-//		// 100% down to 0% duty cycle in the forward direction
-//		for (i=100; i>=0; i--) {
-//			FTM0_set_duty_cycle(i, freq0, dir);
-//			delay(10);
-//		}
-
-		// 0 to 100% duty cycle in reverse direction
-//		for (i=0; i<100; i++) {
-//			FTM0_set_duty_cycle(i, freq0, !dir);	
-//			delay(10);
-//			
-//		}
-
-//		// 100% down to 0% duty cycle in the reverse direction
-//		for (i=100; i>=0; i--) {
-//			FTM0_set_duty_cycle(i, freq0, !dir);
-//			delay(10);
-//		}		
-		// 100% down to 0% duty cycle in the reverse direction
-		// 5.43 = neutral
-//		for (i=1;i<=100;i++){			
-//			FTM3_set_duty_cycle(i, freq3);
-//		
-		//delay(20000);
-		for (i=4;i<=8;i+=.1){			
-			FTM3_set_duty_cycle(i, freq3);
-			delay(10);
-		}
-//		delay(100);
+			//smoothtrace with simple filter
+			for (j = 0; j < 127; j++)
+			{
+				if(line[j] <= 40000)
+				{
+					newData[j] = 0;						
+				}
+				else
+				{
+					newData[j] = 1;
+				}
+			}
+			
+			for(j = 0; j < 127; j++)
+			{
+				if((newData[j] == 1) && (firstOne == 0))
+				{
+					firstOne = 1;
+					risingEdge = j;
+				}
+				else if((newData[j] == 0) && (firstOne == 1))
+				{
+					firstOne = 0;
+					fallingEdge = j-1;
+				}
+//					sprintf(str,"%i\n\r",newData[j]);
+//					sprintf(str,"%i\n\r",line[j]);
+//					uart0_put(str);
+			}
+			
+			mPoint = (fallingEdge + risingEdge)/2;
+			difference = abs(mPoint - midpoint)/10;
+			
+			if( mPoint > midpoint)
+			{
+				//turn right
+//				motorSpeed(10);
+				FTM3_set_duty_cycle(servoMiddle - difference*.5, freq3);
+				sprintf(str,"duty_cycle: %i\n\r", servoMiddle - difference*.5);
+				uart0_put(str);
+			}
+			else if( mPoint < midpoint)
+			{
+				//turn left
+//				motorSpeed(10);				
+				FTM3_set_duty_cycle(servoMiddle + difference*.5, freq3);
+				sprintf(str,"duty_cycle: %i\n\r", servoMiddle + difference*.5);
+				uart0_put(str);
+			}
+			sprintf(str,"Rising Edge = %i,  Falling Edge = %i, Midpoint = %i\n\r",risingEdge,fallingEdge,mPoint);
+			//sprintf(str,"%i\n\r",-2); // end value
+			uart0_put(str);
+			if( risingEdge == 0 && fallingEdge == 0 )
+			{
+				//brake
+				GPIOB_PCOR |= (1 << 22);
+//				motorSpeed(0);
+				break;
+			}				
 	}
 	return 0;
 }	
+
+void motorSpeed(int duty_cycle){	
+	FTM0_set_duty_cycleA(duty_cycle,10000,0);
+	FTM0_set_duty_cycleB(duty_cycle,10000,!0);
+}
+
+float calculateAngle(int left, int right, int center) {
+    // See if we're the left side or the right side.
+    // Sin function will only report a positive angle.
+    float angle = 0;
+    float diff = 0;
+    // Leaning to the right
+    if (center < midpoint) {
+        diff = ((float)(center - midpoint))/((float)midpoint);
+        angle = acosf(diff);
+        // Shifts it to the angle we want
+        angle = MAX_THETA - angle;
+    }
+    // Leaning to the left
+    else if (center > midpoint) {
+        diff = ((float)(midpoint - center))/((float)midpoint);
+        angle  = acosf(diff);
+        // Shifts it to the angle we want
+        angle = angle - MAX_THETA;
+    }
+    // else: Dead center :)
+    angle = ((angle * 180.0f) / M_PI);
+    return angle;
+}
 
 /**
  * Waits for a delay (in milliseconds)
