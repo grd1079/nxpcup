@@ -21,7 +21,8 @@
 #define midpoint 63
 #define M_PI 3.14159265358979323846
 #define MAX_THETA 90
-#define servoMiddle 4.6
+#define servoMiddle 5
+//#define servoMiddle 3.5
 void delay(int del);
 int motorTest(int testNum);
 
@@ -92,10 +93,10 @@ int main(void) {
 				}
 			}	
 			
-			//smoothtrace with simple filter
+			//smoothtrace with simple filter: will change for future
 			for (j = 0; j < 127; j++)
 			{
-				if(line[j] <= 40000)
+				if(line[j] <= 7000)
 				{
 					newData[j] = 0;						
 				}
@@ -129,28 +130,28 @@ int main(void) {
 			{
 				//turn right
 //				motorSpeed(10);
-				FTM3_set_duty_cycle(servoMiddle - difference*.5, freq3);
-				sprintf(str,"duty_cycle: %i\n\r", servoMiddle - difference*.5);
-				uart0_put(str);
+				FTM3_set_duty_cycle(5 - difference*.75, freq3);
+//				sprintf(str,"duty_cycle: %i\n\r", servoMiddle - difference*.5);
+//				uart0_put(str);
 			}
 			else if( mPoint < midpoint)
 			{
 				//turn left
 //				motorSpeed(10);				
-				FTM3_set_duty_cycle(servoMiddle + difference*.5, freq3);
-				sprintf(str,"duty_cycle: %i\n\r", servoMiddle + difference*.5);
-				uart0_put(str);
+				FTM3_set_duty_cycle(5 + difference*.75, freq3);
+//				sprintf(str,"duty_cycle: %i\n\r", servoMiddle + difference*.5);
+//				uart0_put(str);
 			}
 			sprintf(str,"Rising Edge = %i,  Falling Edge = %i, Midpoint = %i\n\r",risingEdge,fallingEdge,mPoint);
 			//sprintf(str,"%i\n\r",-2); // end value
 			uart0_put(str);
-			if( risingEdge == 0 && fallingEdge == 0 )
-			{
-				//brake
-				GPIOB_PCOR |= (1 << 22);
-//				motorSpeed(0);
-				break;
-			}				
+//			if( risingEdge == 0 && fallingEdge == 0 ) 	// carpet detection
+//			{
+//				//brake
+//				GPIOB_PCOR |= (1 << 22);
+////				motorSpeed(0);
+//				break;
+//			}				
 	}
 	return 0;
 }	
@@ -195,44 +196,6 @@ void delay(int del){
 		// Do nothing
 		// uart0_put("hello");
 	}
-}
-
-int motorTest(int testNum){
-	//int i;
-	int dir = 1; // forward
-	if (testNum > 3) {
-		 dir = 0; // reverse
-	
-	}
-	switch (testNum) {
-		//full speed forward
-		case 1:
-			delay(1);
-			break;
-		//half speed forward
-		case 2:
-			delay(5);
-			break;
-		//quarter speed forward
-		case 3:
-			delay(10);
-			break;
-
-		//quarter speed reverse
-		case 4:
-			delay(10);
-			break;
-
-		//half speed reverse
-		case 5:
-			delay(5);
-			break;
-		//full speed reverse
-		case 6:
-			delay(1);
-			break;					
-	}
-	return dir;
 }
 
 /* ADC0 Conversion Complete ISR  */
