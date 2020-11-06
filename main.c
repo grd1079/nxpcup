@@ -4,7 +4,7 @@
  * Author:  
  * Created:  
  * Modified: Carson Clarke-Magrab <ctc7359@rit.edu> 
- */
+ */ 
 
 #include "MK64F12.h"
 #include "uart.h"
@@ -44,7 +44,6 @@ uint16_t newData[128];
 
 // These variables are for streaming the camera
 //	 data over UART
-int debugcamdata = 1;
 int capcnt = 0;
 char str[100];
 
@@ -72,6 +71,7 @@ int main(void) {
 		int risingEdge = 0, fallingEdge = 0;
 		int mPoint = 0;
 		int difference;
+		int oneCount;
 		double i = 0;
 		int j;
 		
@@ -80,7 +80,9 @@ int main(void) {
 			sprintf(str,"%i\n\r",-1); // start value
 			uart0_put(str);
 				
-//			motorSpeed(30);
+			motorSpeed(30);
+
+		
 			//smooth trace
 			for (j = 0; j < 127; j++) {					
 				if(j < 123)
@@ -96,62 +98,60 @@ int main(void) {
 			//smoothtrace with simple filter: will change for future
 			for (j = 0; j < 127; j++)
 			{
-				if(line[j] <= 7000)
+				if(line[j] <= 30000)
 				{
-					newData[j] = 0;						
+					newData[j] = 0;
+					if(firstOne == 1)
+					{
+						firstOne = 0;
+						fallingEdge = j-1;
+					}
 				}
 				else
 				{
 					newData[j] = 1;
+					oneCount +=1;
+					if(firstOne == 0)
+					{
+						risingEdge = j;
+						firstOne = 1;	
+					}					
 				}
 			}
-			
-			for(j = 0; j < 127; j++)
-			{
-				if((newData[j] == 1) && (firstOne == 0))
-				{
-					firstOne = 1;
-					risingEdge = j;
-				}
-				else if((newData[j] == 0) && (firstOne == 1))
-				{
-					firstOne = 0;
-					fallingEdge = j-1;
-				}
+					
 //					sprintf(str,"%i\n\r",newData[j]);
 //					sprintf(str,"%i\n\r",line[j]);
 //					uart0_put(str);
-			}
+			
 			
 			mPoint = (fallingEdge + risingEdge)/2;
 			difference = abs(mPoint - midpoint)/10;
-			
-			if( mPoint > midpoint)
+		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, Midpoint = %i oneCount = %i\n\r",risingEdge,fallingEdge,mPoint, oneCount);			
+			uart0_put(str);			
+			if( oneCount >= 90 )
+			{
+				FTM3_set_duty_cycle(servoMiddle, freq3);				
+			}			
+			else if( mPoint > midpoint)
 			{
 				//turn right
-//				motorSpeed(10);
-				FTM3_set_duty_cycle(5 - difference*.75, freq3);
-//				sprintf(str,"duty_cycle: %i\n\r", servoMiddle - difference*.5);
-//				uart0_put(str);
+				motorSpeed(30);
+				FTM3_set_duty_cycle(servoMiddle - difference*.8, freq3);
 			}
 			else if( mPoint < midpoint)
 			{
 				//turn left
-//				motorSpeed(10);				
-				FTM3_set_duty_cycle(5 + difference*.75, freq3);
-//				sprintf(str,"duty_cycle: %i\n\r", servoMiddle + difference*.5);
-//				uart0_put(str);
+				motorSpeed(30);				
+				FTM3_set_duty_cycle(servoMiddle + difference*.5, freq3);
 			}
-			sprintf(str,"Rising Edge = %i,  Falling Edge = %i, Midpoint = %i\n\r",risingEdge,fallingEdge,mPoint);
-			//sprintf(str,"%i\n\r",-2); // end value
-			uart0_put(str);
-//			if( risingEdge == 0 && fallingEdge == 0 ) 	// carpet detection
-//			{
-//				//brake
-//				GPIOB_PCOR |= (1 << 22);
-////				motorSpeed(0);
-//				break;
-//			}				
+			if( risingEdge == 0 && fallingEdge == 0 ) 	// carpet detection
+			{
+				//brake
+				GPIOB_PCOR |= (1 << 22);
+				motorSpeed(0);
+				break;
+			}
+			oneCount = 0;
 	}
 	return 0;
 }	
@@ -262,11 +262,6 @@ void FTM2_IRQHandler(void){ //For FTM timer
 *		interrupts to control when the line capture occurs
 */
 void PIT0_IRQHandler(void){
-	if (debugcamdata) {
-		// Increment capture counter so that we can only 
-		//	send line data once every ~2 seconds
-		capcnt += 1;
-	}
 		// Clear interrupt
 		PIT_TFLG0 |= PIT_TFLG_TIF_MASK;
 	
