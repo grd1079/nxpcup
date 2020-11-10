@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdbool.h> 
 
 #define A (1<<0)
 #define B (1<<1)
@@ -31,6 +32,7 @@ void FTM2_IRQHandler(void);
 void PIT1_IRQHandler(void);
 void ADC0_IRQHandler(void);
 void motorSpeed(int);
+bool carpetDetection(int,int);
 
 // Pixel counter for camera logic
 // Starts at -2 so that the SI pulse occurs
@@ -80,7 +82,9 @@ int main(void) {
 			sprintf(str,"%i\n\r",-1); // start value
 			uart0_put(str);
 				
+			GPIOE_PCOR |= GREEN_LED;
 			motorSpeed(30);
+			
 
 		
 			//smooth trace
@@ -132,23 +136,18 @@ int main(void) {
 			{
 				FTM3_set_duty_cycle(servoMiddle, freq3);				
 			}			
-			else if( mPoint > midpoint)
-			{
-				//turn right
+			else if( mPoint > midpoint)	//turn right
+			{				
 				motorSpeed(30);
 				FTM3_set_duty_cycle(servoMiddle - difference*.8, freq3);
 			}
-			else if( mPoint < midpoint)
-			{
-				//turn left
+			else if( mPoint < midpoint)	//turn left
+			{				
 				motorSpeed(30);				
 				FTM3_set_duty_cycle(servoMiddle + difference*.5, freq3);
 			}
-			if( risingEdge == 0 && fallingEdge == 0 ) 	// carpet detection
-			{
-				//brake
-				GPIOB_PCOR |= (1 << 22);
-				motorSpeed(0);
+			if( carpetDetection(risingEdge, fallingEdge) ) 	// carpet detection
+			{			
 				break;
 			}
 			oneCount = 0;
@@ -159,6 +158,20 @@ int main(void) {
 void motorSpeed(int duty_cycle){	
 	FTM0_set_duty_cycleA(duty_cycle,10000,0);
 	FTM0_set_duty_cycleB(duty_cycle,10000,!0);
+}
+
+bool carpetDetection(int risingEdge, int fallingEdge){
+	if( risingEdge == 0 && fallingEdge == 0 )
+	{
+		GPIOE_PSOR |= GREEN_LED;
+		GPIOB_PCOR |= RED_LED;
+		motorSpeed(0);
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 float calculateAngle(int left, int right, int center) {
