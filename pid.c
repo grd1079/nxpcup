@@ -1,20 +1,31 @@
-#ifndef _UART_H
-#define _UART_H
+#include "pid.h"
 
-#include "MK64F12.h"
-#include <stdint.h>
+/** Internal functions **/
+float calculatePorportional(pid_t* control, float error);
+float calculateIntegration(pid_t* control, float error);
+float calculateDerivative(pid_t* control, float error);
 
-#define RED_LED		(1 << 22)
-#define BLUE_LED 	(1 << 21)
-#define GREEN_LED	(1 << 26)
-#define CAMERA_CLK (1 << 9)
-#define CAMERA_SI (1 << 23)
+float calculatePID(const float desired, const float actual, pid_t* control) {
+    // Calculate error
+    float error = desired - actual;
+    // Calculate PID components
+    control->pid_p = calculatePorportional(control, error);
+    control->pid_i = calculateIntegration(control, error);
+    control->pid_d = calculateDerivative(control, error);
+    // Store diffs
+    control->diff = error;
+    return (control->pid_p + control->pid_i + control->pid_d);
+}
 
-void LED_Init(void);
-void uart0_put(char *ptr_str), uart3_put(char *ptr_str);
-void uart_init(void);
-uint8_t uart0_getchar(void), uart3_getchar(void);
-void uart0_putchar(char ch), uart3_putchar(char ch);
-void uart0_putNumU(int i);
+float calculatePorportional(pid_t* control, float error) {
+    return control->kp * error;
+}
 
-#endif /* UART_H */
+float calculateIntegration(pid_t* control, float error) {
+    control->sigma = control->sigma + error;
+    return (control->sigma * control->ki);
+}
+
+float calculateDerivative(pid_t* control, float error) {
+    return ((error - control->diff) * control->kd);
+}
