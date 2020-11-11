@@ -27,5 +27,5 @@ float calculateIntegration(pid_t* control, float error) {
 }
 
 float calculateDerivative(pid_t* control, float error) {
-    return ((error - control->diff) * control->kd);
+    return (((error - control->diff) * control->kd)/100);
 }

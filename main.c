@@ -35,6 +35,7 @@ void delay(int del);
 void FTM2_IRQHandler(void);
 void PIT1_IRQHandler(void);
 void ADC0_IRQHandler(void);
+float MapDifference(float, float, float, float, float);
 
 bool InRange(int,int,int);
 double Clamp(double, double, double);
@@ -44,7 +45,7 @@ void MotorSpeed(int);
 bool CarpetDetection(int,int);
 void SharpRight(int);
 void SharpLeft(int);
-void ServoDirection(int);
+void ServoDirection(float);
 
 // Pixel counter for camera logic
 // Starts at -2 so that the SI pulse occurs
@@ -67,6 +68,8 @@ pid_t PID = {.kp = 0.45, .ki = 0.15, .kd = 0.20};
 uint16_t freq0 = 10000; // Frequency = 10 kHz
 uint16_t freq3 = 50; // Frequency = 50 Hz 		
 uint16_t dir = 0;
+
+float turnCycle;
 
 int main(void) {
 	
@@ -138,40 +141,13 @@ int main(void) {
 			
 			
 			actualMidpoint = (fallingEdge + risingEdge)/2;
-//			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID)/10;
-			difference = abs(actualMidpoint - desiredMidpoint)/10;
-			
+			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID);
+			turnCycle  = MapDifference(difference, midpointMin, midpointMax, leftServoMax, rightServoMax);
+			//difference = abs(actualMidpoint - desiredMidpoint)/10;
+			ServoDirection(turnCycle);
 		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount);			
 			uart0_put(str);			
-			if( oneCount >= 90 )
-			{
-				FTM3_set_duty_cycle(servoMiddle, freq3);				
-			}
-			if( InRange(desiredMidpoint - 5, desiredMidpoint + 5, actualMidpoint) )	//speedup
-			{
-					MotorSpeed(40);
-			}				
-//			else if( actualMidpoint > midpointMax)	//turn left sharply
-//			{				
-//					SharpLeft(30);
-//					ServoDirection(Clamp(servoMiddle - difference*.5, leftServoMax, rightServoMax));
-//			}
-			else if( actualMidpoint > servoMiddle + 5 ) //turn left slowly
-			{ 
-					MotorSpeed(30);
-					ServoDirection(Clamp(servoMiddle - difference*.8, leftServoMax, rightServoMax));
-			}
-//			else if( actualMidpoint < midpointMin)	//turn right sharply
-//			{								
-//					SharpRight(30);
-//					ServoDirection(Clamp(servoMiddle + difference*.5, leftServoMax, rightServoMax));
-//			}
-			else if( actualMidpoint < servoMiddle - 5 ) //turn right slowly
-			{ 
-					MotorSpeed(30);
-					ServoDirection(Clamp(servoMiddle + difference*.8, leftServoMax, rightServoMax));
-			}
-			
+			MotorSpeed(40);
 			if( CarpetDetection(risingEdge, fallingEdge) ) 	// carpet detection
 			{			
 				break;
@@ -196,7 +172,7 @@ void MotorSpeed(int duty_cycle){
 	FTM0_set_duty_cycleB(duty_cycle,freq0,!dir);
 }
 
-void ServoDirection(int duty_cycle){
+void ServoDirection(float duty_cycle){
 	FTM3_set_duty_cycle(duty_cycle, freq3);
 }
 
@@ -226,28 +202,8 @@ double Clamp( double value, double min, double max )
 		else{ return value; }
 }
 
-float CalculateAngle(int left, int right, int center) {
-    // See if we're the left side or the right side.
-    // Sin function will only report a positive angle.
-    float angle = 0;
-    float diff = 0;
-    // Leaning to the right
-    if (center < desiredMidpoint) {
-        diff = ((float)(center - desiredMidpoint))/((float)desiredMidpoint);
-        angle = acosf(diff);
-        // Shifts it to the angle we want
-        angle = MAX_THETA - angle;
-    }
-    // Leaning to the left
-    else if (center > desiredMidpoint) {
-        diff = ((float)(desiredMidpoint - center))/((float)desiredMidpoint);
-        angle  = acosf(diff);
-        // Shifts it to the angle we want
-        angle = angle - MAX_THETA;
-    }
-    // else: Dead center :)
-    angle = ((angle * 180.0f) / M_PI);
-    return angle;
+float MapDifference(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 /**
