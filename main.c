@@ -63,7 +63,7 @@ char str[100];
 // ADC0VAL holds the current ADC value
 uint16_t ADC0VAL;
 
-pid_t PID = {.kp = 0.45, .ki = 0.15, .kd = 0.20}; 
+pid_t PID = {.kp = 0.45, .ki = 0, .kd = 0}; 
 uint16_t freq0 = 10000; // Frequency = 10 kHz
 uint16_t freq3 = 50; // Frequency = 50 Hz 		
 uint16_t dir = 0;
@@ -89,9 +89,8 @@ int main(void) {
 		double i = 0;
 		int j;
 				
-			// send the array over uart
-				
-			GPIOE_PCOR |= GREEN_LED;
+			// send the array over uart	
+//			GPIOE_PCOR |= GREEN_LED;
 //			MotorSpeed(30);			
 		
 			//smooth trace
@@ -136,8 +135,8 @@ int main(void) {
 			
 			
 			actualMidpoint = (fallingEdge + risingEdge)/2;
-//			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID)/10;
-			difference = abs(actualMidpoint - desiredMidpoint)/10;
+			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID)/10;
+//			difference = abs(actualMidpoint - desiredMidpoint)/10;
 			
 //		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount);			
 //			uart0_put(str);			
@@ -147,18 +146,18 @@ int main(void) {
 			}
 			if( InRange(desiredMidpoint - 5, desiredMidpoint + 5, actualMidpoint) )	//speedup
 			{
-					MotorSpeed(40);
+					MotorSpeed(30);
 //					sprintf(str,"Going straight");			
 //					uart0_put(str);	
 			}				
 			else if( actualMidpoint > midpointMax)	//turn left sharply
 			{				
-					SharpLeft(40);
+					SharpLeft(30);
 					ServoDirection(Clamp(servoMiddle - difference*.5, servoMin, servoMax));
 			}
 			else if( actualMidpoint > desiredMidpoint ) //turn left slowly
 			{ 
-					MotorSpeed(50);
+					MotorSpeed(30);
 //					sprintf(str,"Turning Left");			
 //					uart0_put(str);
 //					sprintf(str,"Servo Position: %f\n\r", Clamp(servoMiddle - difference*.5, servoMin, servoMax));			
@@ -167,12 +166,12 @@ int main(void) {
 			}
 			else if( actualMidpoint < midpointMin)	//turn right sharply
 			{								
-					SharpRight(40);
+					SharpRight(30);
 					ServoDirection(Clamp(servoMiddle + difference*.5, servoMin, servoMax));
 			}
 			else if( actualMidpoint < desiredMidpoint ) //turn right slowly
 			{ 
-					MotorSpeed(40);
+					MotorSpeed(30);
 //					sprintf(str,"Turning Right");			
 //					uart0_put(str);	
 					sprintf(str,"Servo Position: %f\n\r", Clamp(servoMiddle + difference*.5, servoMin, servoMax));			
