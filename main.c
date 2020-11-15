@@ -59,12 +59,12 @@ uint16_t newData[128];
 
 // These variables are for streaming the camera
 //	 data over UART
-char str[100];
+char str[200];
 
 // ADC0VAL holds the current ADC value
 uint16_t ADC0VAL;
 
-pid_t PID = {.kp = 0.45, .ki = 0.15, .kd = 0.20};
+pid_t PID = {.kp = 5.0, .ki = 0.0, .kd = 100.0};
 uint16_t freq0 = 10000; // Frequency = 10 kHz
 uint16_t freq3 = 50; // Frequency = 50 Hz 		
 uint16_t dir = 0;
@@ -79,7 +79,7 @@ int main(void) {
 	camera_init();
 	
 	// Print welcome over serial
-	uart0_put("Running... \n\r");
+	// uart0_put("Running... \n\r");
 	for(;;)  //loop forever
 	{
 		// uint16_t dc = 0;
@@ -87,14 +87,14 @@ int main(void) {
 		int firstOne = 0;
 		int risingEdge = 0, fallingEdge = 0;
 		int actualMidpoint = 0;
-		int difference;
+		float difference;
 		int oneCount;
 		double i = 0;
 		int j;
 				
 			// send the array over uart
-			sprintf(str,"%i\n\r",-1); // start value
-			uart0_put(str);
+			//sprintf(str,"%i\n\r",-1); // start value
+			//uart0_put(str);
 				
 			GPIOE_PCOR |= GREEN_LED;
 //			motorSpeed(30);			
@@ -135,19 +135,27 @@ int main(void) {
 				}
 			}
 					
-//					sprintf(str,"%i\n\r",newData[j]);
-//					sprintf(str,"%i\n\r",line[j]);
-//					uart0_put(str);
+						//sprintf(str,"%i\n\r",risingEdge);
+						//uart0_put(str);
+						//sprintf(str,"%i\n\r",fallingEdge);
+						//uart0_put(str);
 			
 			
 			actualMidpoint = (fallingEdge + risingEdge)/2;
+			sprintf(str,"%i\n\r",actualMidpoint);
+			//uart0_put(str);
 			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID);
-			turnCycle  = MapDifference(difference, midpointMin, midpointMax, leftServoMax, rightServoMax);
+			//sprintf(str,"%f\n\r",difference);
+			//uart0_put(str);
+			turnCycle = MapDifference(difference, -100.0, 100.0, leftServoMax, rightServoMax);
+			turnCycle = Clamp(turnCycle, leftServoMax, rightServoMax);
+			//sprintf(str,"%f\n\r",turnCycle);
+			//uart0_put(str);
 			//difference = abs(actualMidpoint - desiredMidpoint)/10;
 			ServoDirection(turnCycle);
-		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount);			
+		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r pidOut = %f\n\r turnCycle = %f\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount, difference, turnCycle);			
 			uart0_put(str);			
-			MotorSpeed(40);
+			//MotorSpeed(30);
 			if( CarpetDetection(risingEdge, fallingEdge) ) 	// carpet detection
 			{			
 				break;
@@ -203,7 +211,7 @@ double Clamp( double value, double min, double max )
 }
 
 float MapDifference(float x, float in_min, float in_max, float out_min, float out_max) {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+  return (x - in_min) * ((out_max - out_min) / (in_max - in_min)) + out_min;
 }
 
 /**
