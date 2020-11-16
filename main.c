@@ -42,7 +42,7 @@ double Clamp(double, double, double);
 
 //car mechanics
 void MotorSpeed(int);
-bool CarpetDetection(int,int);
+bool CarpetDetection(int,int,int);
 void SharpRight(int);
 void SharpLeft(int);
 void ServoDirection(float);
@@ -51,6 +51,9 @@ void ServoDirection(float);
 // Starts at -2 so that the SI pulse occurs
 //		ADC reads start
 int pixcnt = -2;
+
+// ignore first couple carpet ditects
+int offRoad = 0;
 // clkval toggles with each FTM interrupt
 int clkval = 0;
 // line stores the current array of camera data
@@ -156,7 +159,7 @@ int main(void) {
 		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r pidOut = %f\n\r turnCycle = %f\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount, difference, turnCycle);			
 			uart0_put(str);			
 			//MotorSpeed(30);
-			if( CarpetDetection(risingEdge, fallingEdge) ) 	// carpet detection
+			if( CarpetDetection(risingEdge, fallingEdge, offRoad) ) 	// carpet detection
 			{			
 				break;
 			}
@@ -184,13 +187,19 @@ void ServoDirection(float duty_cycle){
 	FTM3_set_duty_cycle(duty_cycle, freq3);
 }
 
-bool CarpetDetection(int risingEdge, int fallingEdge){
-	if( risingEdge == 0 && fallingEdge == 0 )
+bool CarpetDetection(int risingEdge, int fallingEdge, int offRoad){
+	if( risingEdge == 0 && fallingEdge == 0)
 	{
-		GPIOE_PSOR |= GREEN_LED;
-		GPIOB_PCOR |= RED_LED;
-		MotorSpeed(0);
-		return true;
+		if (offRoad > 1){
+			GPIOE_PSOR |= GREEN_LED;
+			GPIOB_PCOR |= RED_LED;
+			MotorSpeed(0);
+			return true;
+		}
+		else{
+			offRoad++;
+			return false;
+		}
 	}
 	else
 	{
