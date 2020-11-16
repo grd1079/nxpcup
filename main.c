@@ -28,6 +28,7 @@
 #define servoMax 6.4
 #define midpointMin 45
 #define midpointMax 80
+#define speed 70
 
 void delay(int del);
 
@@ -35,13 +36,14 @@ void delay(int del);
 void FTM2_IRQHandler(void);
 void PIT1_IRQHandler(void);
 void ADC0_IRQHandler(void);
+float MapDifference(float, float, float, float, float);
 
 bool InRange(int,int,int);
 double Clamp(double, double, double);
 
 //car mechanics
 void MotorSpeed(int);
-bool CarpetDetection(int,int);
+void CarpetDetection(int,int);
 void SharpRight(int);
 void SharpLeft(int);
 void ServoDirection(double);
@@ -50,23 +52,29 @@ void ServoDirection(double);
 // Starts at -2 so that the SI pulse occurs
 //		ADC reads start
 int pixcnt = -2;
+
 // clkval toggles with each FTM interrupt
 int clkval = 0;
 // line stores the current array of camera data
 uint16_t line[128];
 uint16_t newData[128];
 
+//finish line variable
+bool finishLine = false;
+
 // These variables are for streaming the camera
 //	 data over UART
-char str[100];
+char str[200];
 
 // ADC0VAL holds the current ADC value
 uint16_t ADC0VAL;
 
-pid_t PID = {.kp = 0.45, .ki = 0, .kd = 0}; 
+pid_t PID = {.kp = 5.0, .ki = 0.0, .kd = 100.0};
 uint16_t freq0 = 10000; // Frequency = 10 kHz
 uint16_t freq3 = 50; // Frequency = 50 Hz 		
 uint16_t dir = 0;
+
+float turnCycle;
 
 int main(void) {
 	
@@ -76,22 +84,21 @@ int main(void) {
 	camera_init();
 	
 	// Print welcome over serial
-	uart0_put("Running... \n\r");
+	// uart0_put("Running... \n\r");
 	for(;;)  //loop forever
 	{
 		// uint16_t dc = 0;
 //		char c = 48;
-		int firstOne = 0;
+		int firstIteration = 0;
 		int risingEdge = 0, fallingEdge = 0;
 		int actualMidpoint = 0;
-		int difference;
+		float difference;
 		int oneCount;
 		double i = 0;
 		int j;
 				
 			// send the array over uart	
-//			GPIOE_PCOR |= GREEN_LED;
-//			MotorSpeed(30);			
+			GPIOB_PSOR |= RED_LED;
 		
 			//smooth trace
 			for (j = 0; j < 127; j++) {					
@@ -105,15 +112,17 @@ int main(void) {
 				}
 			}	
 			
+			sprintf(str,"start\n\r");			
+			uart0_put(str);
 			//smoothtrace with simple filter: will change for future
 			for (j = 0; j < 127; j++)
 			{
 				if(line[j] <= 30000)
 				{
 					newData[j] = 0;
-					if(firstOne == 1)
+					if(firstIteration == 1)
 					{
-						firstOne = 0;
+						firstIteration = 0;
 						fallingEdge = j-1;
 					}
 				}
@@ -121,68 +130,61 @@ int main(void) {
 				{
 					newData[j] = 1;
 					oneCount += 1;
-					if(firstOne == 0)
+					if(firstIteration == 0)
 					{
-						risingEdge = j;
-						firstOne = 1;	
+						if( risingEdge != 0 )
+						{
+//							sprintf(str,"stop\n\r");			
+//							uart0_put(str);
+							finishLine = true;
+						}
+						else
+						{
+							risingEdge = j;
+							firstIteration = 1;	
+						}
 					}					
 				}
-			}
-					
-//					sprintf(str,"%i\n\r",newData[j]);
-//					sprintf(str,"%i\n\r",line[j]);
-//					uart0_put(str);
+//				sprintf(str,"newData[j]:%i \n\r", newData[j]);			
+//				uart0_put(str);
+			}			
+//			sprintf(str,"end\n\r");			
+//			uart0_put(str);
+			//if( finishLine){ MotorSpeed(0);break;}
 			
-			
-			actualMidpoint = (fallingEdge + risingEdge)/2;
-			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID)/10;
-//			difference = abs(actualMidpoint - desiredMidpoint)/10;
-			
-//		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount);			
-//			uart0_put(str);			
+			actualMidpoint = (fallingEdge + risingEdge)/2;	
 			if( oneCount >= 90 )
 			{
 				FTM3_set_duty_cycle(servoMiddle, freq3);				
 			}
-			if( InRange(desiredMidpoint - 5, desiredMidpoint + 5, actualMidpoint) )	//speedup
+			if( InRange(desiredMidpoint - 10, desiredMidpoint + 10, actualMidpoint) )	//speedup
 			{
-					MotorSpeed(30);
-//					sprintf(str,"Going straight");			
-//					uart0_put(str);	
+					MotorSpeed(speed);
 			}				
 			else if( actualMidpoint > midpointMax)	//turn left sharply
 			{				
-					SharpLeft(30);
-					ServoDirection(Clamp(servoMiddle - difference*.5, servoMin, servoMax));
+					SharpLeft(speed);					
 			}
 			else if( actualMidpoint > desiredMidpoint ) //turn left slowly
 			{ 
-					MotorSpeed(30);
-//					sprintf(str,"Turning Left");			
-//					uart0_put(str);
-//					sprintf(str,"Servo Position: %f\n\r", Clamp(servoMiddle - difference*.5, servoMin, servoMax));			
-//					uart0_put(str);	
-					ServoDirection(Clamp(servoMiddle - difference*.5, servoMin, servoMax));
+					MotorSpeed(speed-15);					
 			}
 			else if( actualMidpoint < midpointMin)	//turn right sharply
 			{								
-					SharpRight(30);
-					ServoDirection(Clamp(servoMiddle + difference*.5, servoMin, servoMax));
+					SharpRight(speed);					
 			}
 			else if( actualMidpoint < desiredMidpoint ) //turn right slowly
 			{ 
-					MotorSpeed(30);
-//					sprintf(str,"Turning Right");			
-//					uart0_put(str);	
-					sprintf(str,"Servo Position: %f\n\r", Clamp(servoMiddle + difference*.5, servoMin, servoMax));			
-					uart0_put(str);	
-					ServoDirection(Clamp(servoMiddle + difference*.5, servoMin, servoMax));					
+					MotorSpeed(speed-15);							
 			}
 			
-			if( CarpetDetection(risingEdge, fallingEdge) ) 	// carpet detection
-			{			
-				break;
-			}
+			CarpetDetection(risingEdge, fallingEdge); 	// carpet detection
+			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID);
+			turnCycle = MapDifference(difference, -100.0, 100.0, servoMin, servoMax);
+			turnCycle = Clamp(turnCycle, servoMin, servoMax);
+			ServoDirection(turnCycle);
+//		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r pidOut = %f\n\r turnCycle = %f\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount, difference, turnCycle);			
+//			uart0_put(str);			
 			oneCount = 0;
 	}
 	return 0;
@@ -195,7 +197,7 @@ void SharpRight(int duty_cycle){
 
 void SharpLeft(int duty_cycle){
 	FTM0_set_duty_cycleA(duty_cycle,freq0,dir);
-	FTM0_set_duty_cycleB(0,freq0,!dir);
+	FTM0_set_duty_cycleB(2,freq0,!dir);
 }
 
 void MotorSpeed(int duty_cycle){	
@@ -203,21 +205,16 @@ void MotorSpeed(int duty_cycle){
 	FTM0_set_duty_cycleB(duty_cycle,freq0,!dir);
 }
 
+
 void ServoDirection(double duty_cycle){
 	FTM3_set_duty_cycle(duty_cycle, freq3);
 }
 
-bool CarpetDetection(int risingEdge, int fallingEdge){
-	if( risingEdge == 0 && fallingEdge == 0 )
+void CarpetDetection(int risingEdge, int fallingEdge){
+	if( risingEdge == 0 && fallingEdge == 0)
 	{
-		GPIOE_PSOR |= GREEN_LED;
-		GPIOB_PCOR |= RED_LED;
-		MotorSpeed(0);
-		return true;
-	}
-	else
-	{
-		return false;
+			GPIOB_PCOR |= RED_LED;
+			MotorSpeed(0);
 	}
 }
 
@@ -233,28 +230,8 @@ double Clamp( double value, double min, double max )
 		else{ return value; }
 }
 
-float CalculateAngle(int left, int right, int center) {
-    // See if we're the left side or the right side.
-    // Sin function will only report a positive angle.
-    float angle = 0;
-    float diff = 0;
-    // Leaning to the right
-    if (center < desiredMidpoint) {
-        diff = ((float)(center - desiredMidpoint))/((float)desiredMidpoint);
-        angle = acosf(diff);
-        // Shifts it to the angle we want
-        angle = MAX_THETA - angle;
-    }
-    // Leaning to the left
-    else if (center > desiredMidpoint) {
-        diff = ((float)(desiredMidpoint - center))/((float)desiredMidpoint);
-        angle  = acosf(diff);
-        // Shifts it to the angle we want
-        angle = angle - MAX_THETA;
-    }
-    // else: Dead center :)
-    angle = ((angle * 180.0f) / M_PI);
-    return angle;
+float MapDifference(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (x - in_min) * ((out_max - out_min) / (in_max - in_min)) + out_min;
 }
 
 /**
