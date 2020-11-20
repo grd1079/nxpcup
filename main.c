@@ -15,6 +15,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdbool.h> 
+#include <string.h>
 
 #define A (1<<0)
 #define B (1<<1)
@@ -27,9 +28,9 @@
 #define servoMax 6.4
 #define midpointMin 45
 #define midpointMax 80
-#define speed 70
+#define speed 66
 
-void delay(int del);
+void Delay(int del);
 
 //camera IRQHandlers
 void FTM2_IRQHandler(void);
@@ -68,7 +69,7 @@ char str[200];
 // ADC0VAL holds the current ADC value
 uint16_t ADC0VAL;
 //.015625
-pid_t PID = {.kp = 5.5, .ki = 0.01, .kd = 30.0};
+pid_t PID = {.kp = 5.0, .ki = 0.01, .kd = 30.0};
 // best time: kp:5, ki:.02, kd: 100
 uint16_t freq0 = 10000; // Frequency = 10 kHz
 uint16_t freq3 = 50; // Frequency = 50 Hz 		
@@ -117,7 +118,7 @@ int main(void) {
 			//smoothtrace with simple filter: will change for future
 			for (j = 0; j < 127; j++)
 			{
-				if(line[j] <= 30000)
+				if(line[j] <= 25000)
 				{
 					newData[j] = 0;
 					if(firstIteration == 1)
@@ -150,7 +151,7 @@ int main(void) {
 			}			
 //			sprintf(str,"end\n\r");			
 //			uart0_put(str);
-			//if( finishLine){ MotorSpeed(0);break;}
+//			if( finishLine ){ MotorSpeed(0);break;}
 			
 			actualMidpoint = (fallingEdge + risingEdge)/2;
 			difference = calculatePID(desiredMidpoint, actualMidpoint, &PID);
@@ -160,7 +161,7 @@ int main(void) {
 			if( oneCount >= 90 )
 			{
 				ServoDirection(servoMiddle);
-				MotorSpeed(speed-10);
+				//MotorSpeed(speed-10);
 			}
 			
 			if( InRange(desiredMidpoint - 10, desiredMidpoint + 10, actualMidpoint) )	//speedup
@@ -169,11 +170,15 @@ int main(void) {
 			}				
 			else if( actualMidpoint > midpointMax)	//turn left sharply
 			{				
-					SharpLeft(speed+10,0);					
+					FTM0_set_duty_cycleA(speed,freq0,!dir);
+					FTM0_set_duty_cycleB(speed,freq0, dir);
+					SharpLeft(speed-22,0);					
 			}
 			else if( actualMidpoint < midpointMin)	//turn right sharply
 			{								
-					SharpRight(speed+10,0);					
+					FTM0_set_duty_cycleA(speed,freq0,!dir);
+					FTM0_set_duty_cycleB(speed,freq0, dir);	
+					SharpRight(speed-22,0);					
 			}
 			else if( actualMidpoint > midpointMax - 7 ) //turn left slowly
 			{ 
@@ -189,6 +194,7 @@ int main(void) {
 //		  sprintf(str,"Rising Edge = %i,  Falling Edge = %i, actualMidpoint = %i oneCount = %i\n\r pidOut = %f\n\r turnCycle = %f\n\r", risingEdge, fallingEdge, actualMidpoint, oneCount, difference, turnCycle);			
 //			uart0_put(str);			
 			oneCount = 0;
+//			memset(newData, 0, sizeof(newData));
 	}
 	return 0;
 }	
