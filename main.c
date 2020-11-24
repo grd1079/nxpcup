@@ -159,7 +159,7 @@ int main(void) {
 			{
 					Drive(speed);
 			}				
-			else if( actualMidpoint > midpointMax)	//turn left sharply
+			else if( actualMidpoint > midpointMax+3)	//turn left sharply
 			{				
 					FTM0_set_duty_cycleA(speed,freq0,!dir);
 					FTM0_set_duty_cycleB(speed,freq0, dir);
